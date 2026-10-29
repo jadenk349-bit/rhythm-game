@@ -1,4 +1,4 @@
-# BeatBack — Fall Festival Rhythm Game
+# Rhythm Game — Fall Festival
 
 A rhythm-memory game for a school fall festival booth. The player hears a rhythm, then taps SPACEBAR (or the big on-screen button) to copy it.
 
@@ -16,7 +16,7 @@ GitHub: https://github.com/jadenk349-bit/rhythm-game (branch `main`)
 - Each round scores out of 100: beat count 33, timing 33, rhythm 34. The game total is out of 300.
 - The **name is cleared after every game**: when the final score is shown and when the player exits. "Next Player" returns to an empty name box.
 - An **✕ Exit** button (top-left) shows on the countdown, game and result screens. It cancels all pending timers and scheduled sounds, discards the game without saving, and goes back to the start screen.
-- Leaderboard: top 10 scores stored in the browser's `localStorage` (key `beatback_leaderboard_v1`). The player's latest score is highlighted by entry id.
+- Leaderboard: top 10 scores stored in the browser's `localStorage` (key `beatback_leaderboard_v1` — old name kept so saved scores survive). The player's latest score is highlighted by entry id.
 
 ## Code notes
 - Game-flow timeouts must go through `later(fn, ms)`, not `setTimeout`, so `exitGame()` can cancel them with `clearGameTimers()`.
