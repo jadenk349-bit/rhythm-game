@@ -1,3 +1,4 @@
-node_modules/
 .DS_Store
 .claude/
+# generated at deploy time by build-config.js
+config.js

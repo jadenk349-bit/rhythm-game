@@ -633,7 +633,7 @@
   <button id="settings-btn" onclick="toggleSettings()">⚙️ Settings</button>
   <div id="settings-menu">
     <button class="settings-item" id="sound-toggle" onclick="toggleSound()">🔊 Sound: On</button>
-    <button class="settings-item danger" onclick="closeSettings(); confirmResetLeaderboard()">🗑️ Reset Leaderboard</button>
+    <button class="settings-item danger" id="reset-item" onclick="closeSettings(); confirmResetLeaderboard()">🗑️ Reset Leaderboard</button>
   </div>
 </div>
 
@@ -792,6 +792,8 @@
 
 </div><!-- end #app -->
 
+<!-- Supabase settings, generated at deploy time (missing when opened as a file) -->
+<script src="config.js"></script>
 <script>
 /* ==============================================================
    RHYTHM GAME — Fall Festival Rhythm Memory Game
@@ -938,8 +940,9 @@ const state = {
   playerTaps:    [],           // ms timestamps (relative, set during input)
   inputStart:    null,         // performance.now() at first tap
   lastKeyTime:   0,            // For key-repeat prevention
+  gameId:        null,         // Unique id of the game in progress
+  lastGameId:    null,         // Last game whose score was submitted (prevents double submit)
   lastEntryId:   null,         // Leaderboard entry to highlight
-  pendingSave:   null,         // Promise while the last score is being saved
 };
 
 // ── GAME TIMERS ───────────────────────────────────────────────
@@ -1011,6 +1014,7 @@ function startGame() {
 
   state.round      = 1;
   state.totalScore = 0;
+  state.gameId     = Date.now() + '-' + Math.random().toString(36).slice(2, 10);
 
   document.getElementById('hud-player').textContent = '👤 ' + state.playerName;
 
@@ -1310,11 +1314,12 @@ function nextRound() {
 
 function showFinalScreen() {
   state.phase = 'idle';
-  // Save to leaderboard (refreshLeaderboard waits for this before redrawing)
-  state.pendingSave = saveScore(state.playerName, state.totalScore).then(id => {
-    state.lastEntryId = id;
-    state.pendingSave = null;
-  });
+  // Save to leaderboard — exactly once per game, even if the button is clicked twice
+  if (state.gameId && state.gameId !== state.lastGameId) {
+    state.lastGameId = state.gameId;
+    state.lastEntryId = null;
+    saveScore(state.gameId, state.playerName, state.totalScore);
+  }
 
   document.getElementById('final-score').textContent = state.totalScore;
   document.getElementById('final-name-display').textContent =
@@ -1419,17 +1424,25 @@ document.addEventListener('keydown', (e) => {
 
 // ── LEADERBOARD ───────────────────────────────────────────────
 /*
- * Shared mode: when the page is served by server.js (http/https), scores are
- * saved to the server so every computer sees the same leaderboard.
- * Local mode: when index.html is opened as a file (or in a preview pane),
- * scores are kept in memory and in localStorage on this computer only.
+ * Shared mode: config.js (generated at deploy time by build-config.js) sets
+ * window.SUPABASE_CONFIG = { url, key }. Scores are read from and written to
+ * the Supabase table `rhythm_scores`, so every computer sees the same list.
+ * Local mode: no config.js (index.html opened as a file or in a preview pane).
+ * Scores are kept in memory and in localStorage on this computer only.
  */
-const SHARED_MODE = location.protocol === 'http:' || location.protocol === 'https:';
+const SUPABASE = (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.url && window.SUPABASE_CONFIG.key)
+  ? window.SUPABASE_CONFIG : null;
+const SHARED_MODE = !!SUPABASE;
 const LB_KEY = 'beatback_leaderboard_v1';
-const LB_REFRESH_MS = 15000; // how often the home screen re-fetches shared scores
+const PENDING_KEY = 'rhythm_pending_scores_v1';
+const LB_REFRESH_MS = 3000;     // how often the leaderboard re-fetches shared scores
+const LB_TIMEOUT_MS = 8000;     // give up on a single request after this long
+const LB_LIMIT = 10;
 
 let lbScores = [];          // last list drawn on screen
 let leaderboardCache = null; // local mode store
+let pendingCache = null;     // shared mode: finished games not yet uploaded
+let refreshing = false;      // avoid overlapping refreshes
 
 function loadLocal() {
   if (!leaderboardCache) {
@@ -1445,67 +1458,126 @@ function storeLocal(lb) {
   try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch {}
 }
 
-/** Call the score API; throws an Error with the server's message on failure. */
-async function api(path, body) {
-  const res = await fetch(path, body ? {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  } : undefined);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Server error (${res.status})`);
-  return data;
+/**
+ * Call the Supabase REST API for the rhythm_scores table.
+ * Only the publishable key is used; Row Level Security limits it to SELECT and INSERT.
+ */
+async function supabaseRequest(query, options = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), LB_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${SUPABASE.url}/rest/v1/rhythm_scores${query}`, {
+      ...options,
+      signal: ctrl.signal,
+      cache: 'no-store',
+      headers: { apikey: SUPABASE.key, 'Content-Type': 'application/json', ...options.headers },
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((data && data.message) || `Supabase error (${res.status})`);
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ── Pending uploads (shared mode) ──
+// A finished game goes into this queue first, saved to localStorage, and is only
+// removed once Supabase confirms the insert. A network failure, a refresh or a
+// restart therefore can't lose a score; it's retried on every refresh tick.
+function loadPending() {
+  if (!pendingCache) {
+    try { pendingCache = JSON.parse(localStorage.getItem(PENDING_KEY)) || []; }
+    catch { pendingCache = []; }
+  }
+  return pendingCache;
+}
+function storePending(list) {
+  pendingCache = list;
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(list)); } catch {}
+}
+
+/** Upload queued scores one at a time; stops at the first failure and keeps the rest. */
+async function flushPending() {
+  let list = loadPending();
+  while (list.length) {
+    const item = list[0];
+    let rows;
+    try {
+      rows = await supabaseRequest('?select=id', {
+        method: 'POST',
+        headers: { Prefer: 'return=representation' },
+        body: JSON.stringify({ player_name: item.name, score: item.score }),
+      });
+    } catch {
+      return false;
+    }
+    if (item.gameId === state.lastGameId && rows && rows[0]) state.lastEntryId = rows[0].id;
+    list = loadPending().filter(p => p.gameId !== item.gameId);
+    storePending(list);
+  }
+  return true;
 }
 
 function setLeaderboardStatus(msg) {
   document.getElementById('lb-status').textContent = msg || '';
 }
 
-/** Fetch the latest scores and redraw the list. */
+/** Upload any waiting scores, then fetch the latest list and redraw it. */
 async function refreshLeaderboard() {
-  if (state.pendingSave) await state.pendingSave; // make sure a just-finished game is included
   if (!SHARED_MODE) {
     lbScores = loadLocal();
     renderLeaderboard();
     return;
   }
+  if (refreshing) return;
+  refreshing = true;
   try {
-    lbScores = (await api('/api/scores')).scores;
-    setLeaderboardStatus('');
-  } catch {
-    setLeaderboardStatus("⚠️ Can't reach the leaderboard server. Retrying…");
+    await flushPending();
+    let online = true;
+    try {
+      const rows = await supabaseRequest(
+        `?select=id,player_name,score,created_at&order=score.desc,created_at.asc&limit=${LB_LIMIT}`);
+      lbScores = rows.map(r => ({ id: r.id, name: r.player_name, score: r.score }));
+    } catch {
+      online = false;
+    }
+    const waiting = loadPending().length;
+    if (waiting) {
+      setLeaderboardStatus(`⏳ ${waiting} score${waiting > 1 ? 's' : ''} waiting to upload. Retrying automatically…`);
+    } else if (!online) {
+      setLeaderboardStatus("⚠️ Can't reach the leaderboard. Retrying…");
+    } else {
+      setLeaderboardStatus('');
+    }
+    renderLeaderboard();
+  } finally {
+    refreshing = false;
   }
-  renderLeaderboard();
 }
 
-/** Save a score; resolves to the new entry's id (or null if saving failed). */
-async function saveScore(name, score) {
+/** Record a finished game. In shared mode it is queued and uploaded in the background. */
+function saveScore(gameId, name, score) {
   if (!SHARED_MODE) {
     const lb = loadLocal();
-    const id = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-    lb.push({ id, name, score });
+    lb.push({ id: gameId, name, score });
     lb.sort((a, b) => b.score - a.score);
-    lb.splice(10); // keep top 10
+    lb.splice(LB_LIMIT);
     storeLocal(lb);
-    return id;
+    state.lastEntryId = gameId;
+    return;
   }
-  try {
-    const data = await api('/api/scores', { name, score });
-    lbScores = data.scores;
-    return data.id;
-  } catch (err) {
-    setLeaderboardStatus(`⚠️ ${name}'s score couldn't be saved: ${err.message}`);
-    return null;
-  }
+  storePending([...loadPending(), { gameId, name, score }]);
+  refreshLeaderboard();
 }
 
-// Keep the home-screen leaderboard current when other computers add scores
+// Keep the leaderboard current when other computers add scores, and retry
+// any uploads that failed. Hidden tabs skip the fetch and catch up when shown.
 setInterval(() => {
-  if (SHARED_MODE && document.visibilityState === 'visible' &&
-      document.getElementById('screen-start').classList.contains('active')) {
-    refreshLeaderboard();
-  }
+  if (SHARED_MODE && document.visibilityState === 'visible') refreshLeaderboard();
 }, LB_REFRESH_MS);
+document.addEventListener('visibilitychange', () => {
+  if (SHARED_MODE && document.visibilityState === 'visible') refreshLeaderboard();
+});
 
 function renderLeaderboard() {
   const lb  = lbScores;
@@ -1539,24 +1611,22 @@ function renderLeaderboard() {
   });
 }
 
+/**
+ * Reset is local-mode only. The shared Supabase leaderboard can't be deleted
+ * from the browser (RLS blocks DELETE); an admin clears it in the Supabase
+ * dashboard instead. In shared mode the menu item is hidden (see INIT).
+ */
 function confirmResetLeaderboard() {
+  if (SHARED_MODE) return;
   openModal(
     'Reset Leaderboard?',
-    SHARED_MODE
-      ? 'All scores will be permanently deleted for everyone. Enter the admin passcode to confirm.'
-      : 'All scores on this computer will be permanently deleted.',
-    async (passcode) => {
-      if (SHARED_MODE) {
-        await api('/api/scores/reset', { passcode }); // throws on wrong passcode
-        lbScores = [];
-      } else {
-        storeLocal([]);
-        lbScores = [];
-      }
+    'All scores on this computer will be permanently deleted.',
+    () => {
+      storeLocal([]);
+      lbScores = [];
       renderLeaderboard();
       playClickSound();
-    },
-    { passcode: SHARED_MODE }
+    }
   );
 }
 
@@ -1621,6 +1691,8 @@ document.querySelector('.game-title').addEventListener('dblclick', () => {
 });
 
 // ── INIT ──────────────────────────────────────────────────────
+// The shared leaderboard can only be reset from the Supabase dashboard
+if (SHARED_MODE) document.getElementById('reset-item').style.display = 'none';
 // The home screen shows the leaderboard (rendered inside showScreen)
 showScreen('screen-start');
 </script>
