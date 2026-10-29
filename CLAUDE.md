@@ -1,6 +1,6 @@
-# BeatBack — Spring Fair Rhythm Game
+# BeatBack — Fall Festival Rhythm Game
 
-A rhythm-memory game for a school spring fair booth. The player hears a rhythm, then taps SPACEBAR (or the big on-screen button) to copy it.
+A rhythm-memory game for a school fall festival booth. The player hears a rhythm, then taps SPACEBAR (or the big on-screen button) to copy it.
 
 GitHub: https://github.com/jadenk349-bit/rhythm-game (branch `main`)
 
