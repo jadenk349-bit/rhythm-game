@@ -64,8 +64,8 @@
     position: relative; z-index: 1;
     width: 100%; height: 100%;
     display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    padding: 12px;
+    align-items: center;
+    padding: 56px 12px 12px; /* top room for the fixed Sound / Exit buttons */
     overflow-y: auto;
   }
 
@@ -80,7 +80,8 @@
     gap: 18px;
     animation: fadeUp .4s ease;
   }
-  .screen.active { display: flex; }
+  /* margin:auto centres vertically but still scrolls from the top when content is taller than the window */
+  .screen.active { display: flex; margin: auto 0; }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(24px); }
@@ -611,7 +612,17 @@
 
     <div class="btn-row">
       <button class="btn btn-primary" onclick="startGame()">▶ Start Game</button>
-      <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-leaderboard')">🏅 Leaderboard</button>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="card" style="padding:16px;">
+      <h3 style="text-align:center;margin-bottom:12px;">🏅 Leaderboard</h3>
+      <ul id="leaderboard-list">
+        <li id="lb-empty">No scores yet. Be the first!</li>
+      </ul>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-danger btn-sm" onclick="confirmResetLeaderboard()">Reset Scores</button>
+      </div>
     </div>
   </div>
 
@@ -711,21 +722,6 @@
 
     <div class="btn-row">
       <button class="btn btn-primary" onclick="goHome()">▶ Next Player</button>
-      <button class="btn btn-secondary" onclick="showScreen('screen-leaderboard')">🏅 Leaderboard</button>
-    </div>
-  </div>
-
-  <!-- ── LEADERBOARD SCREEN ────────────────────────────────── -->
-  <div class="screen" id="screen-leaderboard">
-    <div class="game-title" style="font-size:2.2rem;">🏅 Leaderboard</div>
-    <div class="card" style="padding:16px;">
-      <ul id="leaderboard-list">
-        <li id="lb-empty">No scores yet. Be the first!</li>
-      </ul>
-    </div>
-    <div class="btn-row">
-      <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-start')">← Back</button>
-      <button class="btn btn-danger btn-sm" onclick="confirmResetLeaderboard()">Reset Scores</button>
     </div>
   </div>
 
@@ -888,7 +884,7 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.getElementById('exit-btn').classList.toggle('visible', GAME_SCREENS.includes(id));
-  if (id === 'screen-leaderboard') renderLeaderboard();
+  if (id === 'screen-start') renderLeaderboard();
 }
 
 // ── PLAYER NAME ───────────────────────────────────────────────
@@ -1441,8 +1437,7 @@ document.querySelector('.game-title').addEventListener('dblclick', () => {
 });
 
 // ── INIT ──────────────────────────────────────────────────────
-// Make sure leaderboard screen updates when navigated to via JS
-// (already handled in renderLeaderboard call inside showScreen)
+// The home screen shows the leaderboard (rendered inside showScreen)
 showScreen('screen-start');
 </script>
 </body>
