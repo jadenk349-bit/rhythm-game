@@ -465,12 +465,14 @@
   }
 
   /* ============================================================
-     SOUND TOGGLE
+     SETTINGS MENU (top right)
   ============================================================ */
-  #sound-toggle {
+  #settings {
     position: fixed;
     top: 14px; right: 14px;
     z-index: 100;
+  }
+  #settings-btn {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 50px;
@@ -481,7 +483,35 @@
     cursor: pointer;
     transition: all .2s;
   }
-  #sound-toggle:hover { color: var(--text); border-color: var(--accent4); }
+  #settings-btn:hover,
+  #settings.open #settings-btn { color: var(--text); border-color: var(--accent4); }
+  #settings-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px); right: 0;
+    min-width: 200px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    flex-direction: column; gap: 4px;
+    animation: fadeUp .2s ease;
+  }
+  #settings.open #settings-menu { display: flex; }
+  .settings-item {
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: left;
+    font-family: var(--font-head);
+    font-size: .95rem;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .settings-item:hover { background: var(--surface); }
+  .settings-item.danger { color: var(--accent1); }
 
   /* ============================================================
      EXIT BUTTON (visible only while a game is running)
@@ -568,9 +598,15 @@
 <body>
 
 <!-- ============================================================
-     SOUND TOGGLE (always visible)
+     SETTINGS MENU (always visible)
 ============================================================ -->
-<button id="sound-toggle" onclick="toggleSound()">🔊 Sound</button>
+<div id="settings">
+  <button id="settings-btn" onclick="toggleSettings()">⚙️ Settings</button>
+  <div id="settings-menu">
+    <button class="settings-item" id="sound-toggle" onclick="toggleSound()">🔊 Sound: On</button>
+    <button class="settings-item danger" onclick="closeSettings(); confirmResetLeaderboard()">🗑️ Reset Leaderboard</button>
+  </div>
+</div>
 
 <!-- ============================================================
      EXIT BUTTON (shown on countdown / game / result screens)
@@ -620,9 +656,6 @@
       <ul id="leaderboard-list">
         <li id="lb-empty">No scores yet. Be the first!</li>
       </ul>
-      <div class="btn-row" style="margin-top:14px;">
-        <button class="btn btn-danger btn-sm" onclick="confirmResetLeaderboard()">Reset Scores</button>
-      </div>
     </div>
   </div>
 
@@ -818,8 +851,20 @@ function playFailSound() {
 
 function toggleSound() {
   soundEnabled = !soundEnabled;
-  document.getElementById('sound-toggle').textContent = soundEnabled ? '🔊 Sound' : '🔇 Muted';
+  document.getElementById('sound-toggle').textContent = soundEnabled ? '🔊 Sound: On' : '🔇 Sound: Off';
 }
+
+// ── SETTINGS MENU ─────────────────────────────────────────────
+function toggleSettings() {
+  document.getElementById('settings').classList.toggle('open');
+}
+function closeSettings() {
+  document.getElementById('settings').classList.remove('open');
+}
+// Close the menu when clicking anywhere outside it
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#settings')) closeSettings();
+});
 
 // ── RHYTHM PATTERNS ──────────────────────────────────────────
 /**
