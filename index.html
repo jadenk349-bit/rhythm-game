@@ -558,6 +558,35 @@
     animation: fadeUp .3s ease;
   }
   #modal-box p { color: var(--muted); font-size: .95rem; }
+  #modal-input {
+    display: none;
+    width: 100%;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 50px;
+    padding: 10px 18px;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--text);
+    outline: none;
+    text-align: center;
+  }
+  #modal-input:focus { border-color: var(--accent4); }
+  #modal-error {
+    font-family: var(--font-head);
+    font-size: .9rem;
+    color: var(--accent1);
+    min-height: 1.2em;
+    margin-top: -8px;
+  }
+  .btn:disabled { opacity: .5; cursor: wait; }
+  #lb-status {
+    font-size: .85rem;
+    color: var(--accent1);
+    text-align: center;
+    margin-top: 8px;
+  }
+  #lb-status:empty { display: none; }
 
   /* ============================================================
      DIVIDER / MISC
@@ -620,6 +649,8 @@
   <div id="modal-box">
     <h2 id="modal-title">Are you sure?</h2>
     <p id="modal-body">This action cannot be undone.</p>
+    <input type="password" id="modal-input" placeholder="Admin passcode" autocomplete="off">
+    <div id="modal-error"></div>
     <div class="btn-row">
       <button class="btn btn-danger btn-sm" id="modal-confirm">Confirm</button>
       <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
@@ -656,6 +687,7 @@
       <ul id="leaderboard-list">
         <li id="lb-empty">No scores yet. Be the first!</li>
       </ul>
+      <div id="lb-status"></div>
     </div>
   </div>
 
@@ -907,6 +939,7 @@ const state = {
   inputStart:    null,         // performance.now() at first tap
   lastKeyTime:   0,            // For key-repeat prevention
   lastEntryId:   null,         // Leaderboard entry to highlight
+  pendingSave:   null,         // Promise while the last score is being saved
 };
 
 // ── GAME TIMERS ───────────────────────────────────────────────
@@ -929,7 +962,7 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   document.getElementById('exit-btn').classList.toggle('visible', GAME_SCREENS.includes(id));
-  if (id === 'screen-start') renderLeaderboard();
+  if (id === 'screen-start') refreshLeaderboard();
 }
 
 // ── PLAYER NAME ───────────────────────────────────────────────
@@ -1277,8 +1310,11 @@ function nextRound() {
 
 function showFinalScreen() {
   state.phase = 'idle';
-  // Save to leaderboard
-  state.lastEntryId = saveScore(state.playerName, state.totalScore);
+  // Save to leaderboard (refreshLeaderboard waits for this before redrawing)
+  state.pendingSave = saveScore(state.playerName, state.totalScore).then(id => {
+    state.lastEntryId = id;
+    state.pendingSave = null;
+  });
 
   document.getElementById('final-score').textContent = state.totalScore;
   document.getElementById('final-name-display').textContent =
@@ -1382,14 +1418,20 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ── LEADERBOARD ───────────────────────────────────────────────
+/*
+ * Shared mode: when the page is served by server.js (http/https), scores are
+ * saved to the server so every computer sees the same leaderboard.
+ * Local mode: when index.html is opened as a file (or in a preview pane),
+ * scores are kept in memory and in localStorage on this computer only.
+ */
+const SHARED_MODE = location.protocol === 'http:' || location.protocol === 'https:';
 const LB_KEY = 'beatback_leaderboard_v1';
+const LB_REFRESH_MS = 15000; // how often the home screen re-fetches shared scores
 
-// Scores are kept in memory and also saved to localStorage when the browser allows it.
-// If storage is blocked (e.g. some preview panes), the leaderboard still updates
-// after every game; it just resets when the page is reloaded.
-let leaderboardCache = null;
+let lbScores = [];          // last list drawn on screen
+let leaderboardCache = null; // local mode store
 
-function loadLeaderboard() {
+function loadLocal() {
   if (!leaderboardCache) {
     try {
       leaderboardCache = JSON.parse(localStorage.getItem(LB_KEY)) || [];
@@ -1398,24 +1440,75 @@ function loadLeaderboard() {
   return leaderboardCache.slice();
 }
 
-function storeLeaderboard(lb) {
+function storeLocal(lb) {
   leaderboardCache = lb;
   try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch {}
 }
 
-/** Save a score; returns the new entry's id. */
-function saveScore(name, score) {
-  const lb = loadLeaderboard();
-  const id = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
-  lb.push({ id, name, score, date: new Date().toLocaleDateString() });
-  lb.sort((a, b) => b.score - a.score);
-  lb.splice(10); // keep top 10
-  storeLeaderboard(lb);
-  return id;
+/** Call the score API; throws an Error with the server's message on failure. */
+async function api(path, body) {
+  const res = await fetch(path, body ? {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  } : undefined);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Server error (${res.status})`);
+  return data;
 }
 
+function setLeaderboardStatus(msg) {
+  document.getElementById('lb-status').textContent = msg || '';
+}
+
+/** Fetch the latest scores and redraw the list. */
+async function refreshLeaderboard() {
+  if (state.pendingSave) await state.pendingSave; // make sure a just-finished game is included
+  if (!SHARED_MODE) {
+    lbScores = loadLocal();
+    renderLeaderboard();
+    return;
+  }
+  try {
+    lbScores = (await api('/api/scores')).scores;
+    setLeaderboardStatus('');
+  } catch {
+    setLeaderboardStatus("⚠️ Can't reach the leaderboard server. Retrying…");
+  }
+  renderLeaderboard();
+}
+
+/** Save a score; resolves to the new entry's id (or null if saving failed). */
+async function saveScore(name, score) {
+  if (!SHARED_MODE) {
+    const lb = loadLocal();
+    const id = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+    lb.push({ id, name, score });
+    lb.sort((a, b) => b.score - a.score);
+    lb.splice(10); // keep top 10
+    storeLocal(lb);
+    return id;
+  }
+  try {
+    const data = await api('/api/scores', { name, score });
+    lbScores = data.scores;
+    return data.id;
+  } catch (err) {
+    setLeaderboardStatus(`⚠️ ${name}'s score couldn't be saved: ${err.message}`);
+    return null;
+  }
+}
+
+// Keep the home-screen leaderboard current when other computers add scores
+setInterval(() => {
+  if (SHARED_MODE && document.visibilityState === 'visible' &&
+      document.getElementById('screen-start').classList.contains('active')) {
+    refreshLeaderboard();
+  }
+}, LB_REFRESH_MS);
+
 function renderLeaderboard() {
-  const lb  = loadLeaderboard();
+  const lb  = lbScores;
   const list = document.getElementById('leaderboard-list');
   const empty = document.getElementById('lb-empty');
 
@@ -1433,7 +1526,7 @@ function renderLeaderboard() {
 
   lb.forEach((entry, i) => {
     const li = document.createElement('li');
-    if (entry.id && entry.id === state.lastEntryId) {
+    if (entry.id != null && entry.id === state.lastEntryId) {
       li.classList.add('highlight');
     }
     const rankCls = rankClasses[i] || '';
@@ -1449,24 +1542,57 @@ function renderLeaderboard() {
 function confirmResetLeaderboard() {
   openModal(
     'Reset Leaderboard?',
-    'All scores will be permanently deleted.',
-    () => {
-      storeLeaderboard([]);
+    SHARED_MODE
+      ? 'All scores will be permanently deleted for everyone. Enter the admin passcode to confirm.'
+      : 'All scores on this computer will be permanently deleted.',
+    async (passcode) => {
+      if (SHARED_MODE) {
+        await api('/api/scores/reset', { passcode }); // throws on wrong passcode
+        lbScores = [];
+      } else {
+        storeLocal([]);
+        lbScores = [];
+      }
       renderLeaderboard();
       playClickSound();
-    }
+    },
+    { passcode: SHARED_MODE }
   );
 }
 
 // ── MODAL HELPER ──────────────────────────────────────────────
-function openModal(title, body, onConfirm) {
+/**
+ * Show a confirmation box. onConfirm(passcode) may be async; if it throws,
+ * the error is shown in the box and the box stays open.
+ */
+function openModal(title, body, onConfirm, { passcode = false } = {}) {
+  const input  = document.getElementById('modal-input');
+  const error  = document.getElementById('modal-error');
+  const button = document.getElementById('modal-confirm');
+
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').textContent  = body;
-  document.getElementById('modal-confirm').onclick = () => {
-    onConfirm();
-    closeModal();
+  input.value = '';
+  input.style.display = passcode ? 'block' : 'none';
+  error.textContent = '';
+
+  const confirm = async () => {
+    button.disabled = true;
+    try {
+      await onConfirm(input.value);
+      closeModal();
+    } catch (err) {
+      error.textContent = err.message;
+      input.select();
+    } finally {
+      button.disabled = false;
+    }
   };
+  button.onclick = confirm;
+  input.onkeydown = (e) => { if (e.key === 'Enter') confirm(); };
+
   document.getElementById('modal-overlay').classList.add('open');
+  if (passcode) input.focus();
 }
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
