@@ -194,15 +194,14 @@
      NAME INPUT
   ============================================================ */
   .name-wrap {
-    display: flex; gap: 0;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
     width: 100%; max-width: 380px;
   }
   .name-wrap input {
-    flex: 1;
+    width: 100%;
     background: var(--surface);
     border: 1.5px solid var(--border);
-    border-right: none;
-    border-radius: 50px 0 0 50px;
+    border-radius: 50px;
     padding: 12px 20px;
     font-family: var(--font-body);
     font-size: 1rem;
@@ -212,37 +211,21 @@
   }
   .name-wrap input:focus { border-color: var(--accent4); }
   .name-wrap input::placeholder { color: var(--muted); }
-  .name-wrap .btn-sm {
-    border-radius: 0 50px 50px 0;
+  .name-wrap input.invalid {
+    border-color: var(--accent1);
+    animation: shake .35s ease;
   }
-
-  /* ============================================================
-     MODE SELECTOR
-  ============================================================ */
-  .mode-row {
-    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
-  }
-  .mode-btn {
+  #name-error {
     font-family: var(--font-head);
-    font-size: 1rem;
-    padding: 14px 28px;
-    border-radius: var(--radius);
-    border: 2px solid var(--border);
-    background: var(--surface);
-    color: var(--muted);
-    cursor: pointer;
-    transition: all .2s;
-    text-align: center;
-    min-width: 160px;
+    font-size: .9rem;
+    color: var(--accent1);
+    min-height: 1.2em;
   }
-  .mode-btn:hover { border-color: var(--accent4); color: var(--text); }
-  .mode-btn.selected {
-    border-color: var(--accent4);
-    background: rgba(77,150,255,0.15);
-    color: var(--accent4);
-    box-shadow: var(--glow4);
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25%      { transform: translateX(-8px); }
+    75%      { transform: translateX(8px); }
   }
-  .mode-btn span { display: block; font-family: var(--font-body); font-size: .78rem; color: var(--muted); margin-top: 4px; }
 
   /* ============================================================
      GAME HUD
@@ -473,13 +456,6 @@
     font-size: 1.2rem;
     color: var(--accent2);
   }
-  .lb-mode {
-    font-size: .75rem;
-    color: var(--muted);
-    background: var(--card);
-    border-radius: 50px;
-    padding: 2px 10px;
-  }
   #lb-empty {
     text-align: center;
     color: var(--muted);
@@ -505,6 +481,27 @@
     transition: all .2s;
   }
   #sound-toggle:hover { color: var(--text); border-color: var(--accent4); }
+
+  /* ============================================================
+     EXIT BUTTON (visible only while a game is running)
+  ============================================================ */
+  #exit-btn {
+    display: none;
+    position: fixed;
+    top: 14px; left: 14px;
+    z-index: 100;
+    background: var(--card);
+    border: 1px solid var(--accent1);
+    border-radius: 50px;
+    padding: 8px 16px;
+    font-family: var(--font-head);
+    font-size: .9rem;
+    color: var(--accent1);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  #exit-btn.visible { display: block; }
+  #exit-btn:hover { background: rgba(255,107,107,0.15); }
 
   /* ============================================================
      MODAL (confirmation)
@@ -575,6 +572,11 @@
 <button id="sound-toggle" onclick="toggleSound()">🔊 Sound</button>
 
 <!-- ============================================================
+     EXIT BUTTON (shown on countdown / game / result screens)
+============================================================ -->
+<button id="exit-btn" onclick="exitGame()">✕ Exit</button>
+
+<!-- ============================================================
      MODAL (for confirmations)
 ============================================================ -->
 <div id="modal-overlay">
@@ -601,6 +603,7 @@
     <div class="card">
       <p class="instructions">
         Listen to the rhythm, then <b>tap SPACEBAR</b> to copy it exactly.<br>
+        <b>3 rounds</b> — 4, 5, then 6 beats. A new random rhythm every time!<br>
         The closer your timing, the higher your score!
       </p>
       <br>
@@ -612,20 +615,10 @@
     <!-- Name input -->
     <div class="name-wrap">
       <input type="text" id="player-name" maxlength="20"
-             placeholder="Enter your name…" autocomplete="off">
-      <button class="btn btn-secondary btn-sm" onclick="focusStart()">OK</button>
-    </div>
-
-    <!-- Mode selector -->
-    <div class="mode-row">
-      <div class="mode-btn selected" id="mode-practice" onclick="selectMode('practice')">
-        🎓 Practice
-        <span>Retry rounds freely</span>
-      </div>
-      <div class="mode-btn" id="mode-competition" onclick="selectMode('competition')">
-        🏆 Competition
-        <span>One shot per round</span>
-      </div>
+             placeholder="Enter your name…" autocomplete="off"
+             oninput="clearNameError()"
+             onkeydown="if (event.key === 'Enter') startGame()">
+      <div id="name-error"></div>
     </div>
 
     <div class="btn-row">
@@ -646,7 +639,7 @@
     <div class="hud">
       <div class="hud-item">Round <span id="hud-round">1</span></div>
       <div class="hud-item">Score <span id="hud-score">0</span></div>
-      <div class="hud-item" id="hud-mode-label">Practice</div>
+      <div class="hud-item" id="hud-player">Player</div>
     </div>
 
     <!-- Message -->
@@ -664,7 +657,7 @@
 
     <!-- Spacebar button -->
     <button id="spacebar-btn" class="disabled"
-            onmousedown="handleTap()" ontouchstart.prevent="handleTap()">
+            onmousedown="handleTap()">
       🥁 TAP RHYTHM
     </button>
     <div id="spacebar-hint">Press SPACEBAR or tap button above</div>
@@ -729,9 +722,8 @@
     <div class="divider"></div>
 
     <div class="btn-row">
-      <button class="btn btn-primary" onclick="startGame()">▶ Play Again</button>
+      <button class="btn btn-primary" onclick="goHome()">▶ Next Player</button>
       <button class="btn btn-secondary" onclick="showScreen('screen-leaderboard')">🏅 Leaderboard</button>
-      <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-start')">Home</button>
     </div>
   </div>
 
@@ -801,6 +793,18 @@ function playBeep(freq = 440, duration = 0.12, type = 'square', vol = 0.35, star
   gain.connect(ctx.destination);
   osc.start(t);
   osc.stop(t + duration + 0.02);
+
+  // Track scheduled sounds so Exit can silence beats that haven't played yet
+  activeOscs.add(osc);
+  osc.onended = () => activeOscs.delete(osc);
+}
+
+const activeOscs = new Set();
+
+/** Stop every sound that is playing or scheduled. */
+function stopAllSounds() {
+  activeOscs.forEach(osc => { try { osc.stop(); } catch {} });
+  activeOscs.clear();
 }
 
 /** Demo-pattern beep: blue-ish tone */
@@ -835,100 +839,136 @@ function toggleSound() {
 
 // ── RHYTHM PATTERNS ──────────────────────────────────────────
 /**
- * Patterns stored as arrays of beat timestamps in milliseconds,
+ * Patterns are arrays of beat timestamps in milliseconds,
  * relative to the first beat (which is always 0).
- * Gaps represent silences; close values = fast notes.
+ * A fresh random pattern is generated for every round.
  */
-const PATTERNS = [
-  // Round 1 — very easy (3 beats)
-  [0, 500, 1000],
-  // Round 2 — easy (3 beats, syncopated)
-  [0, 300, 900],
-  // Round 3 — medium (4 beats)
-  [0, 400, 800, 1200],
-  // Round 4 — medium (4 beats, uneven)
-  [0, 250, 750, 1000],
-  // Round 5 — harder (5 beats)
-  [0, 200, 400, 800, 1200],
-  // Round 6 — harder (5 beats, tricky)
-  [0, 300, 450, 900, 1100],
-  // Round 7 — hard (6 beats)
-  [0, 150, 450, 600, 900, 1200],
-  // Round 8 — hard (6 beats, complex)
-  [0, 200, 350, 700, 850, 1150],
-  // Round 9 — very hard (7 beats)
-  [0, 150, 300, 500, 700, 900, 1150],
-  // Round 10 — expert (8 beats)
-  [0, 100, 250, 400, 600, 750, 950, 1150],
-];
+const BEATS_PER_ROUND = [4, 5, 6];           // round 1, 2, 3
+const INTERVAL_CHOICES = [250, 375, 500, 750]; // possible gaps between beats (ms)
 
-/** Get pattern for a given round (1-indexed). Cycles if > patterns available. */
-function getPattern(round) {
-  const idx = Math.min(round - 1, PATTERNS.length - 1);
-  return PATTERNS[idx];
+let lastPatternKey = '';
+
+/** Build a random pattern with `beats` beats. */
+function generatePattern(beats) {
+  let pattern, key;
+  do {
+    pattern = [0];
+    for (let i = 1; i < beats; i++) {
+      const gap = INTERVAL_CHOICES[Math.floor(Math.random() * INTERVAL_CHOICES.length)];
+      pattern.push(pattern[i - 1] + gap);
+    }
+    key = pattern.join(',');
+    // Reject patterns with all-equal gaps (too boring) or a repeat of the last one
+  } while (new Set(getIntervals(pattern)).size < 2 || key === lastPatternKey);
+  lastPatternKey = key;
+  return pattern;
 }
 
 // ── GAME STATE ────────────────────────────────────────────────
-const TOTAL_ROUNDS = 6;
+const TOTAL_ROUNDS = BEATS_PER_ROUND.length;
+const GAME_SCREENS = ['screen-countdown', 'screen-game', 'screen-result'];
 
 const state = {
-  playerName:    'Player',
-  mode:          'practice',   // 'practice' | 'competition'
+  playerName:    '',
   round:         1,
   totalScore:    0,
   phase:         'idle',       // 'idle' | 'countdown' | 'demo' | 'input' | 'result'
   targetPattern: [],           // ms timestamps (relative)
   playerTaps:    [],           // ms timestamps (relative, set during input)
-  inputStart:    null,         // Date.now() when input phase begins
+  inputStart:    null,         // performance.now() at first tap
   lastKeyTime:   0,            // For key-repeat prevention
-  keyDown:       false,        // Track keydown state
-  practiceRetry: false,
+  lastEntryId:   null,         // Leaderboard entry to highlight
 };
+
+// ── GAME TIMERS ───────────────────────────────────────────────
+// All game-flow timeouts go through later() so Exit can cancel them.
+const gameTimers = new Set();
+
+function later(fn, ms) {
+  const id = setTimeout(() => { gameTimers.delete(id); fn(); }, ms);
+  gameTimers.add(id);
+  return id;
+}
+
+function clearGameTimers() {
+  gameTimers.forEach(id => clearTimeout(id));
+  gameTimers.clear();
+}
 
 // ── SCREEN MANAGEMENT ─────────────────────────────────────────
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  document.getElementById('exit-btn').classList.toggle('visible', GAME_SCREENS.includes(id));
   if (id === 'screen-leaderboard') renderLeaderboard();
 }
 
-// ── NAME / MODE ───────────────────────────────────────────────
-function focusStart() {
-  const n = document.getElementById('player-name').value.trim();
-  if (n) state.playerName = n;
+// ── PLAYER NAME ───────────────────────────────────────────────
+function showNameError(msg) {
+  const input = document.getElementById('player-name');
+  document.getElementById('name-error').textContent = msg;
+  input.classList.remove('invalid');
+  void input.offsetWidth; // reflow to restart shake animation
+  input.classList.add('invalid');
+  input.focus();
 }
 
-function selectMode(mode) {
-  state.mode = mode;
-  document.getElementById('mode-practice').classList.toggle('selected', mode === 'practice');
-  document.getElementById('mode-competition').classList.toggle('selected', mode === 'competition');
-  playClickSound();
+function clearNameError() {
+  document.getElementById('name-error').textContent = '';
+  document.getElementById('player-name').classList.remove('invalid');
+}
+
+/** Forget the current player so the next one must type their own name. */
+function resetPlayer() {
+  state.playerName = '';
+  document.getElementById('player-name').value = '';
+  clearNameError();
+}
+
+/** Back to the start screen, ready for a new player. */
+function goHome() {
+  resetPlayer();
+  showScreen('screen-start');
+  document.getElementById('player-name').focus();
 }
 
 // ── GAME FLOW ─────────────────────────────────────────────────
 
 /** Kick off a new game from the start screen. */
 function startGame() {
-  // grab name if set
   const n = document.getElementById('player-name').value.trim();
-  if (n) state.playerName = n;
+  if (!n) {
+    showNameError('Please enter your name to start!');
+    playFailSound();
+    return;
+  }
+  state.playerName = n;
+  document.getElementById('player-name').blur();
 
   getAudioCtx(); // unlock audio context via user gesture
 
   state.round      = 1;
   state.totalScore = 0;
-  state.practiceRetry = false;
 
-  document.getElementById('hud-mode-label').textContent =
-    state.mode === 'practice' ? '🎓 Practice' : '🏆 Competition';
+  document.getElementById('hud-player').textContent = '👤 ' + state.playerName;
 
   startRound();
+}
+
+/** Abandon the current game without saving and return to the start screen. */
+function exitGame() {
+  clearGameTimers();
+  stopAllSounds();
+  state.phase = 'idle';
+  disableSpacebar();
+  document.getElementById('viz-cursor').style.opacity = '0';
+  goHome();
 }
 
 /** Begin a single round: countdown → demo → input. */
 function startRound() {
   state.phase = 'countdown';
-  state.targetPattern = getPattern(state.round);
+  state.targetPattern = generatePattern(BEATS_PER_ROUND[state.round - 1]);
   state.playerTaps = [];
 
   updateHUD();
@@ -939,6 +979,7 @@ function startRound() {
     clearViz();
     drawTargetViz(state.targetPattern);
     disableSpacebar();
+    state.phase = 'demo';
     playDemoPattern(state.targetPattern, () => {
       setMessage('🥁 Your turn! Copy the rhythm!', 'msg-go');
       enableSpacebar();
@@ -957,7 +998,7 @@ function runCountdown(n, cb) {
       el.textContent = 'GO!';
       el.style.color = 'var(--accent3)';
       playBeep(880, 0.2, 'sine', 0.4);
-      setTimeout(cb, 600);
+      later(cb, 600);
       return;
     }
     el.textContent = val;
@@ -966,7 +1007,7 @@ function runCountdown(n, cb) {
     void el.offsetWidth; // reflow to restart animation
     el.style.animation = 'countPulse .8s ease';
     playBeep(440 + val * 60, 0.12, 'sine', 0.3);
-    setTimeout(() => tick(val - 1), 900);
+    later(() => tick(val - 1), 900);
   }
   tick(n);
 }
@@ -981,24 +1022,25 @@ function playDemoPattern(pattern, onDone) {
   const startT = ctx.currentTime + 0.3; // small lead-in
   const cursor = document.getElementById('viz-cursor');
 
+  const track = document.getElementById('viz-target');
+
   pattern.forEach((ms, i) => {
     const t = startT + ms / 1000;
     playDemoBeep(t);
 
     // Highlight viz beat at correct time
-    setTimeout(() => {
+    later(() => {
       highlightTargetBeat(i);
-      // Move cursor
-      if (cursor && pattern.length > 1) {
-        const pct = ms / (pattern[pattern.length - 1] + 300);
-        cursor.style.left = (pct * 100) + '%';
+      // Move cursor onto the beat being played
+      if (cursor) {
+        cursor.style.left = beatX(ms, pattern, track) + 'px';
         cursor.style.opacity = '1';
       }
     }, (ms + 300) + 50); // +300 = lead-in converted to ms
   });
 
   const totalMs = (pattern[pattern.length - 1] + 300) * 1 + 800;
-  setTimeout(() => {
+  later(() => {
     if (cursor) cursor.style.opacity = '0';
     onDone();
   }, totalMs + 300);
@@ -1014,7 +1056,7 @@ function beginInputPhase() {
   const lastBeat = state.targetPattern[state.targetPattern.length - 1];
   const autoTimeout = lastBeat + 2000; // 2 s of silence after expected end
 
-  state._inputTimer = setTimeout(() => {
+  state._inputTimer = later(() => {
     if (state.phase === 'input') finishInput();
   }, autoTimeout + 200);
 }
@@ -1024,7 +1066,7 @@ function handleTap() {
   if (state.phase !== 'input') return;
 
   // Debounce key-repeat (50 ms minimum gap)
-  const now = Date.now();
+  const now = performance.now();
   if (now - state.lastKeyTime < 50) return;
   state.lastKeyTime = now;
 
@@ -1040,8 +1082,8 @@ function handleTap() {
 
   // Reset auto-finish timer on each tap
   clearTimeout(state._inputTimer);
-  const lastBeat = state.targetPattern[state.targetPattern.length - 1];
-  state._inputTimer = setTimeout(() => {
+  gameTimers.delete(state._inputTimer);
+  state._inputTimer = later(() => {
     if (state.phase === 'input') finishInput();
   }, 1500);
 }
@@ -1057,7 +1099,7 @@ function finishInput() {
   const result = scoreRound(state.targetPattern, state.playerTaps);
   state.totalScore += result.total;
 
-  setTimeout(() => showRoundResult(result), 600);
+  later(() => showRoundResult(result), 600);
 }
 
 // ── SCORING ───────────────────────────────────────────────────
@@ -1181,20 +1223,13 @@ function showRoundResult(result) {
   const btnsEl = document.getElementById('result-btns');
   btnsEl.innerHTML = '';
 
-  if (result.total >= 60 || state.mode === 'competition') {
-    // Play success or partial jingle
-    result.total >= 75 ? playSuccessJingle() : null;
-  } else {
-    playFailSound();
-  }
+  if (result.total >= 75)      playSuccessJingle();
+  else if (result.total < 60)  playFailSound();
 
   if (isLastRound) {
     btnsEl.innerHTML = `<button class="btn btn-primary" onclick="showFinalScreen()">See Final Score</button>`;
   } else {
-    if (state.mode === 'practice' && result.total < 70) {
-      btnsEl.innerHTML += `<button class="btn btn-secondary" onclick="retryRound()">🔄 Retry Round</button>`;
-    }
-    btnsEl.innerHTML += `<button class="btn btn-success" onclick="nextRound()">Next Round →</button>`;
+    btnsEl.innerHTML = `<button class="btn btn-success" onclick="nextRound()">Next Round →</button>`;
   }
 }
 
@@ -1205,12 +1240,6 @@ function setPill(pillId, spanId, text, good) {
   pill.className = 'score-pill ' + (good ? 'good' : 'bad');
 }
 
-function retryRound() {
-  state.totalScore -= (state.totalScore > 0 ? 0 : 0); // no penalty for retry in practice
-  playClickSound();
-  startRound();
-}
-
 function nextRound() {
   state.round++;
   playClickSound();
@@ -1218,12 +1247,16 @@ function nextRound() {
 }
 
 function showFinalScreen() {
+  state.phase = 'idle';
   // Save to leaderboard
-  saveScore(state.playerName, state.totalScore, state.mode);
+  state.lastEntryId = saveScore(state.playerName, state.totalScore);
 
   document.getElementById('final-score').textContent = state.totalScore;
   document.getElementById('final-name-display').textContent =
-    `${state.playerName} — ${state.mode === 'competition' ? '🏆 Competition' : '🎓 Practice'} Mode`;
+    `${state.playerName} — out of ${TOTAL_ROUNDS * 100}`;
+
+  // Name is used up — the next game needs a new one
+  resetPlayer();
 
   showScreen('screen-final');
   playSuccessJingle();
@@ -1269,18 +1302,22 @@ function clearViz() {
   playerTrack.querySelectorAll('.viz-beat').forEach(b => b.remove());
 }
 
-function drawTargetViz(pattern) {
-  const track = document.getElementById('viz-target');
+/** Horizontal pixel position of a beat at `ms` on a track sized for `pattern`. */
+function beatX(ms, pattern, track) {
   const totalMs = pattern[pattern.length - 1] || 1;
   const window  = Math.max(totalMs + 300, VIZ_WINDOW);
   const w = track.clientWidth || 600;
+  return VIZ_PADDING + (ms / window) * (w - VIZ_PADDING * 2);
+}
+
+function drawTargetViz(pattern) {
+  const track = document.getElementById('viz-target');
 
   pattern.forEach((ms, i) => {
     const dot = document.createElement('div');
     dot.className = 'viz-beat target';
     dot.id = 'tviz-' + i;
-    const pct = VIZ_PADDING + (ms / window) * (w - VIZ_PADDING * 2);
-    dot.style.left = pct + 'px';
+    dot.style.left = beatX(ms, pattern, track) + 'px';
     track.appendChild(dot);
   });
 }
@@ -1298,28 +1335,21 @@ function highlightTargetBeat(i) {
 
 function drawPlayerBeat(relMs, targetPattern) {
   const track = document.getElementById('viz-player');
-  const totalMs = targetPattern[targetPattern.length - 1] || 1;
-  const window  = Math.max(totalMs + 300, VIZ_WINDOW);
-  const w = track.clientWidth || 600;
 
   const dot = document.createElement('div');
   dot.className = 'viz-beat player';
-  const pct = VIZ_PADDING + (relMs / window) * (w - VIZ_PADDING * 2);
-  dot.style.left = pct + 'px';
+  dot.style.left = beatX(relMs, targetPattern, track) + 'px';
   track.appendChild(dot);
 }
 
 // ── KEYBOARD HANDLER ──────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   if (e.code === 'Space') {
+    if (e.target.tagName === 'INPUT') return; // allow spaces in the name box
     e.preventDefault();
     if (e.repeat) return; // ignore key-hold repeats
     handleTap();
   }
-});
-
-document.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') state.keyDown = false;
 });
 
 // ── LEADERBOARD ───────────────────────────────────────────────
@@ -1331,12 +1361,15 @@ function loadLeaderboard() {
   } catch { return []; }
 }
 
-function saveScore(name, score, mode) {
+/** Save a score; returns the new entry's id. */
+function saveScore(name, score) {
   const lb = loadLeaderboard();
-  lb.push({ name: name || 'Anonymous', score, mode, date: new Date().toLocaleDateString() });
+  const id = Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  lb.push({ id, name, score, date: new Date().toLocaleDateString() });
   lb.sort((a, b) => b.score - a.score);
   lb.splice(10); // keep top 10
-  localStorage.setItem(LB_KEY, JSON.stringify(lb));
+  try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch {}
+  return id;
 }
 
 function renderLeaderboard() {
@@ -1358,14 +1391,13 @@ function renderLeaderboard() {
 
   lb.forEach((entry, i) => {
     const li = document.createElement('li');
-    if (entry.name === state.playerName && entry.score === state.totalScore) {
+    if (entry.id && entry.id === state.lastEntryId) {
       li.classList.add('highlight');
     }
     const rankCls = rankClasses[i] || '';
     li.innerHTML = `
       <span class="lb-rank ${rankCls}">${rankEmoji[i] || (i + 1)}</span>
-      <span class="lb-name">${escHtml(entry.name)}</span>
-      <span class="lb-mode">${entry.mode === 'competition' ? '🏆' : '🎓'}</span>
+      <span class="lb-name">${escHtml(String(entry.name || 'Anonymous'))}</span>
       <span class="lb-score">${entry.score}</span>
     `;
     list.appendChild(li);
