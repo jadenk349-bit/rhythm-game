@@ -28,4 +28,4 @@ GitHub: https://github.com/jadenk349-bit/rhythm-game (branch `main`)
 
 ## Testing
 - No automated tests. Open `index.html` in a browser and play through.
-- `localStorage` is blocked when the page is opened from a `data:` URL (as in some preview panes), so the leaderboard won't save there. It does save when the file is opened normally.
+- `localStorage` is blocked when the page is opened from a `data:` URL (as in the Claude app preview pane). The leaderboard is also kept in memory (`leaderboardCache`), so it still updates after every game there; it just empties on reload. Always go through `loadLeaderboard()` / `storeLeaderboard()`, never `localStorage` directly.

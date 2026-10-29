@@ -1384,10 +1384,23 @@ document.addEventListener('keydown', (e) => {
 // ── LEADERBOARD ───────────────────────────────────────────────
 const LB_KEY = 'beatback_leaderboard_v1';
 
+// Scores are kept in memory and also saved to localStorage when the browser allows it.
+// If storage is blocked (e.g. some preview panes), the leaderboard still updates
+// after every game; it just resets when the page is reloaded.
+let leaderboardCache = null;
+
 function loadLeaderboard() {
-  try {
-    return JSON.parse(localStorage.getItem(LB_KEY)) || [];
-  } catch { return []; }
+  if (!leaderboardCache) {
+    try {
+      leaderboardCache = JSON.parse(localStorage.getItem(LB_KEY)) || [];
+    } catch { leaderboardCache = []; }
+  }
+  return leaderboardCache.slice();
+}
+
+function storeLeaderboard(lb) {
+  leaderboardCache = lb;
+  try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch {}
 }
 
 /** Save a score; returns the new entry's id. */
@@ -1397,7 +1410,7 @@ function saveScore(name, score) {
   lb.push({ id, name, score, date: new Date().toLocaleDateString() });
   lb.sort((a, b) => b.score - a.score);
   lb.splice(10); // keep top 10
-  try { localStorage.setItem(LB_KEY, JSON.stringify(lb)); } catch {}
+  storeLeaderboard(lb);
   return id;
 }
 
@@ -1438,7 +1451,7 @@ function confirmResetLeaderboard() {
     'Reset Leaderboard?',
     'All scores will be permanently deleted.',
     () => {
-      localStorage.removeItem(LB_KEY);
+      storeLeaderboard([]);
       renderLeaderboard();
       playClickSound();
     }
