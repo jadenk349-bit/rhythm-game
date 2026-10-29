@@ -10,6 +10,7 @@ Live site: https://rhythmgame-vfn6.onrender.com/ — a Render **Static Site** (n
 - `index.html` — the whole game: HTML, CSS and JavaScript in one file.
 - `build-config.js` — runs as the Render build command and writes `config.js` from the `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` env vars. It fails the build (so the previous deploy stays live) if either is missing, or if a secret / `service_role` key is supplied by mistake.
 - `config.js` — generated, git-ignored. Sets `window.SUPABASE_CONFIG = { url, key }`.
+- `Dockerfile` + `serve.js` + `.dockerignore` — for the Render **Docker** service named `rhythm-game`. The image is `node:22-alpine` with no npm dependencies. At container start it runs `node build-config.js` (env vars are runtime-only in Docker), then `serve.js`, which serves only `/`, `/index.html` and `/config.js` on `$PORT` (default 10000) at `0.0.0.0`. The container exits at start if the Supabase env vars are missing.
 - Google Fonts (Fredoka One, Nunito) load from the internet. Without a connection the game still works, just with fallback fonts.
 
 ## Render settings (Static Site)

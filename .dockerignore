@@ -1,0 +1,6 @@
+.git
+.claude
+node_modules
+config.js
+CLAUDE.md
+.DS_Store
