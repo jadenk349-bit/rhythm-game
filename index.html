@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎵 BeatBack — Spring Fair Rhythm Game</title>
+<style>
+  /* ============================================================
+     FONTS & CSS VARIABLES
+  ============================================================ */
+  @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;900&display=swap');
+
+  :root {
+    --bg:        #0d0d1a;
+    --surface:   #161628;
+    --card:      #1e1e38;
+    --border:    #2e2e55;
+    --accent1:   #ff6b6b;   /* coral-red  */
+    --accent2:   #ffd93d;   /* warm gold  */
+    --accent3:   #6bcb77;   /* mint green */
+    --accent4:   #4d96ff;   /* sky blue   */
+    --accent5:   #c77dff;   /* purple     */
+    --text:      #f0f0ff;
+    --muted:     #8888aa;
+    --radius:    16px;
+    --font-head: 'Fredoka One', cursive;
+    --font-body: 'Nunito', sans-serif;
+    --glow1:     0 0 20px rgba(255,107,107,0.4);
+    --glow2:     0 0 20px rgba(255,217,61,0.4);
+    --glow3:     0 0 20px rgba(107,203,119,0.4);
+    --glow4:     0 0 20px rgba(77,150,255,0.4);
+  }
+
+  /* ============================================================
+     RESET & BASE
+  ============================================================ */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+  }
+
+  /* Animated starfield background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse at 20% 30%, rgba(77,150,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 70%, rgba(199,125,255,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 50%, rgba(255,107,107,0.04) 0%, transparent 70%);
+    animation: bgPulse 8s ease-in-out infinite alternate;
+  }
+  @keyframes bgPulse {
+    from { opacity: .6; }
+    to   { opacity: 1; }
+  }
+
+  /* ============================================================
+     LAYOUT WRAPPER
+  ============================================================ */
+  #app {
+    position: relative; z-index: 1;
+    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 12px;
+    overflow-y: auto;
+  }
+
+  /* ============================================================
+     SCREENS (generic)
+  ============================================================ */
+  .screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    width: 100%; max-width: 720px;
+    gap: 18px;
+    animation: fadeUp .4s ease;
+  }
+  .screen.active { display: flex; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ============================================================
+     CARD
+  ============================================================ */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 28px;
+    width: 100%;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+
+  /* ============================================================
+     TYPOGRAPHY
+  ============================================================ */
+  .game-title {
+    font-family: var(--font-head);
+    font-size: clamp(2.8rem, 8vw, 5rem);
+    line-height: 1;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2), var(--accent3), var(--accent4));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-align: center;
+    letter-spacing: 2px;
+    filter: drop-shadow(0 0 20px rgba(255,217,61,0.3));
+  }
+  .subtitle {
+    font-family: var(--font-head);
+    font-size: 1.1rem;
+    color: var(--muted);
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  h2 {
+    font-family: var(--font-head);
+    font-size: 1.6rem;
+    color: var(--accent2);
+    margin-bottom: 8px;
+  }
+  h3 {
+    font-family: var(--font-head);
+    font-size: 1.2rem;
+    color: var(--accent4);
+  }
+
+  /* ============================================================
+     BUTTONS
+  ============================================================ */
+  .btn {
+    font-family: var(--font-head);
+    font-size: 1.2rem;
+    letter-spacing: 1px;
+    border: none; cursor: pointer;
+    border-radius: 50px;
+    padding: 14px 36px;
+    transition: transform .15s, box-shadow .15s, filter .15s;
+    position: relative; overflow: hidden;
+  }
+  .btn:active { transform: scale(.95); }
+  .btn:hover  { filter: brightness(1.12); }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #1a0a00;
+    box-shadow: 0 4px 20px rgba(255,107,107,0.5);
+  }
+  .btn-secondary {
+    background: linear-gradient(135deg, var(--accent4), var(--accent5));
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(77,150,255,0.4);
+  }
+  .btn-success {
+    background: linear-gradient(135deg, var(--accent3), #43a852);
+    color: #001a05;
+    box-shadow: 0 4px 16px rgba(107,203,119,0.4);
+  }
+  .btn-danger {
+    background: transparent;
+    color: var(--accent1);
+    border: 1.5px solid var(--accent1);
+    box-shadow: none;
+    font-size: 1rem;
+    padding: 10px 24px;
+  }
+  .btn-sm {
+    font-size: .95rem;
+    padding: 10px 22px;
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1.5px solid var(--border);
+    font-size: .9rem;
+    padding: 8px 20px;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--accent4); }
+
+  .btn-row {
+    display: flex; flex-wrap: wrap;
+    gap: 14px; justify-content: center;
+  }
+
+  /* ============================================================
+     NAME INPUT
+  ============================================================ */
+  .name-wrap {
+    display: flex; gap: 0;
+    width: 100%; max-width: 380px;
+  }
+  .name-wrap input {
+    flex: 1;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-right: none;
+    border-radius: 50px 0 0 50px;
+    padding: 12px 20px;
+    font-family: var(--font-body);
+    font-size: 1rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color .2s;
+  }
+  .name-wrap input:focus { border-color: var(--accent4); }
+  .name-wrap input::placeholder { color: var(--muted); }
+  .name-wrap .btn-sm {
+    border-radius: 0 50px 50px 0;
+  }
+
+  /* ============================================================
+     MODE SELECTOR
+  ============================================================ */
+  .mode-row {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+  }
+  .mode-btn {
+    font-family: var(--font-head);
+    font-size: 1rem;
+    padding: 14px 28px;
+    border-radius: var(--radius);
+    border: 2px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .2s;
+    text-align: center;
+    min-width: 160px;
+  }
+  .mode-btn:hover { border-color: var(--accent4); color: var(--text); }
+  .mode-btn.selected {
+    border-color: var(--accent4);
+    background: rgba(77,150,255,0.15);
+    color: var(--accent4);
+    box-shadow: var(--glow4);
+  }
+  .mode-btn span { display: block; font-family: var(--font-body); font-size: .78rem; color: var(--muted); margin-top: 4px; }
+
+  /* ============================================================
+     GAME HUD
+  ============================================================ */
+  .hud {
+    display: flex; justify-content: space-between; align-items: center;
+    width: 100%; flex-wrap: wrap; gap: 8px;
+  }
+  .hud-item {
+    font-family: var(--font-head);
+    font-size: 1rem;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 8px 18px;
+  }
+  .hud-item span {
+    color: var(--accent2);
+    font-size: 1.15rem;
+    margin-left: 6px;
+  }
+
+  /* ============================================================
+     MESSAGE AREA
+  ============================================================ */
+  #message-area {
+    font-family: var(--font-head);
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+    text-align: center;
+    min-height: 2.5em;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text);
+    letter-spacing: 1px;
+    transition: color .3s;
+  }
+  #message-area.msg-listen  { color: var(--accent4); }
+  #message-area.msg-go      { color: var(--accent3); }
+  #message-area.msg-done    { color: var(--accent2); }
+  #message-area.msg-bad     { color: var(--accent1); }
+
+  /* ============================================================
+     RHYTHM VISUALIZER
+  ============================================================ */
+  #viz-container {
+    width: 100%;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .viz-label {
+    font-family: var(--font-head);
+    font-size: .9rem;
+    color: var(--muted);
+    text-align: left;
+    padding-left: 4px;
+  }
+  .viz-track {
+    position: relative;
+    height: 52px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .viz-beat {
+    position: absolute;
+    top: 6px; bottom: 6px;
+    width: 18px;
+    border-radius: 6px;
+    transform: translateX(-50%);
+    transition: opacity .2s;
+  }
+  .viz-beat.target {
+    background: var(--accent4);
+    box-shadow: 0 0 10px rgba(77,150,255,0.6);
+    opacity: .7;
+  }
+  .viz-beat.player {
+    background: var(--accent3);
+    box-shadow: 0 0 10px rgba(107,203,119,0.7);
+    opacity: .9;
+  }
+  .viz-beat.miss { background: var(--accent1); opacity: .7; }
+  .viz-beat.hit  { background: var(--accent3); opacity: 1; }
+  .viz-cursor {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent2);
+    opacity: 0;
+    border-radius: 2px;
+    box-shadow: var(--glow2);
+    transition: left .05s linear;
+  }
+
+  /* ============================================================
+     SPACEBAR BUTTON (visual tap target)
+  ============================================================ */
+  #spacebar-btn {
+    width: min(420px, 92%);
+    height: 90px;
+    background: var(--surface);
+    border: 2.5px solid var(--border);
+    border-radius: 18px;
+    font-family: var(--font-head);
+    font-size: 1.3rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .1s;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  #spacebar-btn:active,
+  #spacebar-btn.pressed {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 rgba(0,0,0,0);
+    background: rgba(107,203,119,0.18);
+    border-color: var(--accent3);
+    color: var(--accent3);
+    box-shadow: var(--glow3);
+  }
+  #spacebar-btn.disabled {
+    opacity: .4; cursor: not-allowed;
+    pointer-events: none;
+  }
+  #spacebar-hint {
+    font-family: var(--font-body);
+    font-size: .82rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: -8px;
+  }
+
+  /* ============================================================
+     COUNTDOWN
+  ============================================================ */
+  #countdown-display {
+    font-family: var(--font-head);
+    font-size: clamp(5rem, 18vw, 10rem);
+    text-align: center;
+    line-height: 1;
+    animation: countPulse .8s ease;
+  }
+  @keyframes countPulse {
+    0%   { transform: scale(1.4); opacity: 0; }
+    40%  { transform: scale(1);   opacity: 1; }
+    80%  { transform: scale(1);   opacity: 1; }
+    100% { transform: scale(.8);  opacity: 0; }
+  }
+
+  /* ============================================================
+     SCORE DISPLAY
+  ============================================================ */
+  .score-ring-wrap {
+    display: flex; justify-content: center; align-items: center;
+    margin: 8px 0;
+  }
+  .score-ring {
+    position: relative;
+    width: 160px; height: 160px;
+  }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring-text {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-family: var(--font-head);
+  }
+  .score-ring-num {
+    font-size: 2.8rem;
+    line-height: 1;
+    color: var(--accent2);
+  }
+  .score-ring-label {
+    font-size: .85rem;
+    color: var(--muted);
+  }
+
+  .score-breakdown {
+    display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+  }
+  .score-pill {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 8px 18px;
+    font-family: var(--font-head);
+    font-size: .95rem;
+    color: var(--muted);
+  }
+  .score-pill span { color: var(--accent2); margin-left: 6px; }
+  .score-pill.good span { color: var(--accent3); }
+  .score-pill.bad  span { color: var(--accent1); }
+
+  /* ============================================================
+     LEADERBOARD
+  ============================================================ */
+  #leaderboard-list {
+    list-style: none;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  #leaderboard-list li {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px;
+    transition: border-color .2s;
+  }
+  #leaderboard-list li.highlight { border-color: var(--accent2); }
+  .lb-rank {
+    font-family: var(--font-head);
+    font-size: 1.2rem;
+    width: 28px; text-align: center;
+    color: var(--muted);
+  }
+  .lb-rank.gold   { color: #ffd700; }
+  .lb-rank.silver { color: #c0c0c0; }
+  .lb-rank.bronze { color: #cd7f32; }
+  .lb-name {
+    flex: 1;
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .lb-score {
+    font-family: var(--font-head);
+    font-size: 1.2rem;
+    color: var(--accent2);
+  }
+  .lb-mode {
+    font-size: .75rem;
+    color: var(--muted);
+    background: var(--card);
+    border-radius: 50px;
+    padding: 2px 10px;
+  }
+  #lb-empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 20px;
+    font-style: italic;
+  }
+
+  /* ============================================================
+     SOUND TOGGLE
+  ============================================================ */
+  #sound-toggle {
+    position: fixed;
+    top: 14px; right: 14px;
+    z-index: 100;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 8px 16px;
+    font-family: var(--font-head);
+    font-size: .9rem;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  #sound-toggle:hover { color: var(--text); border-color: var(--accent4); }
+
+  /* ============================================================
+     MODAL (confirmation)
+  ============================================================ */
+  #modal-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.7);
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  #modal-overlay.open { display: flex; }
+  #modal-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px 36px;
+    max-width: 380px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    display: flex; flex-direction: column; gap: 18px;
+    animation: fadeUp .3s ease;
+  }
+  #modal-box p { color: var(--muted); font-size: .95rem; }
+
+  /* ============================================================
+     DIVIDER / MISC
+  ============================================================ */
+  .divider {
+    width: 100%; height: 1px;
+    background: linear-gradient(to right, transparent, var(--border), transparent);
+    margin: 4px 0;
+  }
+  .tag {
+    display: inline-block;
+    background: rgba(77,150,255,0.15);
+    border: 1px solid rgba(77,150,255,0.3);
+    color: var(--accent4);
+    border-radius: 50px;
+    padding: 3px 12px;
+    font-size: .8rem;
+    font-family: var(--font-head);
+  }
+  .instructions {
+    color: var(--muted);
+    font-size: .92rem;
+    line-height: 1.7;
+    text-align: center;
+  }
+  .instructions b { color: var(--text); }
+
+  /* ============================================================
+     RESPONSIVE
+  ============================================================ */
+  @media (max-width: 500px) {
+    .card { padding: 18px 16px; }
+    .btn  { font-size: 1rem; padding: 12px 28px; }
+    .hud-item { font-size: .85rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     SOUND TOGGLE (always visible)
+============================================================ -->
+<button id="sound-toggle" onclick="toggleSound()">🔊 Sound</button>
+
+<!-- ============================================================
+     MODAL (for confirmations)
+============================================================ -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <h2 id="modal-title">Are you sure?</h2>
+    <p id="modal-body">This action cannot be undone.</p>
+    <div class="btn-row">
+      <button class="btn btn-danger btn-sm" id="modal-confirm">Confirm</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP ROOT
+============================================================ -->
+<div id="app">
+
+  <!-- ── START SCREEN ──────────────────────────────────────── -->
+  <div class="screen active" id="screen-start">
+    <div class="game-title">BeatBack</div>
+    <div class="subtitle">🌸 Spring Fair Rhythm Challenge 🌸</div>
+
+    <div class="card">
+      <p class="instructions">
+        Listen to the rhythm, then <b>tap SPACEBAR</b> to copy it exactly.<br>
+        The closer your timing, the higher your score!
+      </p>
+      <br>
+      <div style="display:flex;justify-content:center;">
+        <div class="tag">⌨️ SPACEBAR = tap &nbsp;|&nbsp; Mobile: tap the big button</div>
+      </div>
+    </div>
+
+    <!-- Name input -->
+    <div class="name-wrap">
+      <input type="text" id="player-name" maxlength="20"
+             placeholder="Enter your name…" autocomplete="off">
+      <button class="btn btn-secondary btn-sm" onclick="focusStart()">OK</button>
+    </div>
+
+    <!-- Mode selector -->
+    <div class="mode-row">
+      <div class="mode-btn selected" id="mode-practice" onclick="selectMode('practice')">
+        🎓 Practice
+        <span>Retry rounds freely</span>
+      </div>
+      <div class="mode-btn" id="mode-competition" onclick="selectMode('competition')">
+        🏆 Competition
+        <span>One shot per round</span>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="startGame()">▶ Start Game</button>
+      <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-leaderboard')">🏅 Leaderboard</button>
+    </div>
+  </div>
+
+  <!-- ── COUNTDOWN SCREEN ──────────────────────────────────── -->
+  <div class="screen" id="screen-countdown">
+    <div class="game-title" style="font-size:2.2rem;">Get Ready!</div>
+    <div id="countdown-display" style="color:var(--accent2);">3</div>
+  </div>
+
+  <!-- ── GAME SCREEN ───────────────────────────────────────── -->
+  <div class="screen" id="screen-game">
+    <!-- HUD -->
+    <div class="hud">
+      <div class="hud-item">Round <span id="hud-round">1</span></div>
+      <div class="hud-item">Score <span id="hud-score">0</span></div>
+      <div class="hud-item" id="hud-mode-label">Practice</div>
+    </div>
+
+    <!-- Message -->
+    <div id="message-area">Listen carefully…</div>
+
+    <!-- Visualizer -->
+    <div id="viz-container">
+      <div class="viz-label">Target pattern</div>
+      <div class="viz-track" id="viz-target">
+        <div class="viz-cursor" id="viz-cursor"></div>
+      </div>
+      <div class="viz-label">Your pattern</div>
+      <div class="viz-track" id="viz-player"></div>
+    </div>
+
+    <!-- Spacebar button -->
+    <button id="spacebar-btn" class="disabled"
+            onmousedown="handleTap()" ontouchstart.prevent="handleTap()">
+      🥁 TAP RHYTHM
+    </button>
+    <div id="spacebar-hint">Press SPACEBAR or tap button above</div>
+  </div>
+
+  <!-- ── ROUND RESULT SCREEN ───────────────────────────────── -->
+  <div class="screen" id="screen-result">
+    <div class="game-title" style="font-size:2.4rem;" id="result-title">Round Complete!</div>
+
+    <div class="score-ring-wrap">
+      <div class="score-ring">
+        <svg width="160" height="160" viewBox="0 0 160 160">
+          <circle cx="80" cy="80" r="68" fill="none"
+                  stroke="var(--border)" stroke-width="14"/>
+          <circle cx="80" cy="80" r="68" fill="none"
+                  stroke="var(--accent2)" stroke-width="14"
+                  stroke-linecap="round"
+                  stroke-dasharray="427"
+                  stroke-dashoffset="427"
+                  id="score-arc"
+                  style="transition: stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)"/>
+        </svg>
+        <div class="score-ring-text">
+          <div class="score-ring-num" id="result-score">0</div>
+          <div class="score-ring-label">/ 100</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="score-breakdown">
+      <div class="score-pill" id="pill-count">
+        Beats <span id="pb-count">—</span>
+      </div>
+      <div class="score-pill" id="pill-timing">
+        Timing <span id="pb-timing">—</span>
+      </div>
+      <div class="score-pill" id="pill-rhythm">
+        Rhythm <span id="pb-rhythm">—</span>
+      </div>
+    </div>
+
+    <div id="result-msg" class="card" style="text-align:center;font-weight:700;font-size:1.1rem;color:var(--accent3);">
+      Great job!
+    </div>
+
+    <div class="btn-row" id="result-btns">
+      <!-- Filled by JS -->
+    </div>
+  </div>
+
+  <!-- ── FINAL SCREEN ──────────────────────────────────────── -->
+  <div class="screen" id="screen-final">
+    <div class="game-title" style="font-size:2.4rem;">Game Over!</div>
+
+    <div class="card" style="text-align:center;">
+      <div style="font-family:var(--font-head);font-size:1rem;color:var(--muted);">Total Score</div>
+      <div style="font-family:var(--font-head);font-size:4rem;color:var(--accent2);line-height:1.1;"
+           id="final-score">0</div>
+      <div style="font-size:.9rem;color:var(--muted);" id="final-name-display"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="startGame()">▶ Play Again</button>
+      <button class="btn btn-secondary" onclick="showScreen('screen-leaderboard')">🏅 Leaderboard</button>
+      <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-start')">Home</button>
+    </div>
+  </div>
+
+  <!-- ── LEADERBOARD SCREEN ────────────────────────────────── -->
+  <div class="screen" id="screen-leaderboard">
+    <div class="game-title" style="font-size:2.2rem;">🏅 Leaderboard</div>
+    <div class="card" style="padding:16px;">
+      <ul id="leaderboard-list">
+        <li id="lb-empty">No scores yet. Be the first!</li>
+      </ul>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-sm" onclick="showScreen('screen-start')">← Back</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmResetLeaderboard()">Reset Scores</button>
+    </div>
+  </div>
+
+</div><!-- end #app -->
+
+<script>
+/* ==============================================================
+   BEATBACK — Spring Fair Rhythm Memory Game
+   All logic, audio, and UI in one file.
+   Author: Generated for school spring fair booth.
+   ============================================================== */
+
+// ── AUDIO ENGINE ─────────────────────────────────────────────
+let audioCtx = null;
+let soundEnabled = true;
+
+/**
+ * Get (or lazily create) the Web Audio context.
+ * Must be called from a user gesture to avoid browser autoplay policy.
+ */
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+/**
+ * Play a short beep.
+ * @param {number} freq      - Frequency in Hz
+ * @param {number} duration  - Duration in seconds
+ * @param {string} type      - Oscillator type
+ * @param {number} vol       - Volume 0–1
+ * @param {number} startTime - AudioContext time to schedule (0 = now)
+ */
+function playBeep(freq = 440, duration = 0.12, type = 'square', vol = 0.35, startTime = 0) {
+  if (!soundEnabled) return;
+  const ctx = getAudioCtx();
+  const t = startTime || ctx.currentTime;
+
+  const osc  = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(vol, t + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(t);
+  osc.stop(t + duration + 0.02);
+}
+
+/** Demo-pattern beep: blue-ish tone */
+function playDemoBeep(startTime = 0) {
+  playBeep(660, 0.13, 'sine', 0.4, startTime);
+}
+/** Player tap beep: warmer tone */
+function playPlayerBeep() {
+  playBeep(880, 0.09, 'triangle', 0.3);
+}
+/** UI click sound */
+function playClickSound() {
+  playBeep(330, 0.06, 'square', 0.15);
+}
+/** Success jingle */
+function playSuccessJingle() {
+  const ctx = getAudioCtx();
+  const now = ctx.currentTime;
+  [523, 659, 784, 1047].forEach((f, i) => playBeep(f, 0.15, 'sine', 0.3, now + i * 0.12));
+}
+/** Fail sound */
+function playFailSound() {
+  const ctx = getAudioCtx();
+  const now = ctx.currentTime;
+  [300, 220].forEach((f, i) => playBeep(f, 0.2, 'sawtooth', 0.25, now + i * 0.18));
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById('sound-toggle').textContent = soundEnabled ? '🔊 Sound' : '🔇 Muted';
+}
+
+// ── RHYTHM PATTERNS ──────────────────────────────────────────
+/**
+ * Patterns stored as arrays of beat timestamps in milliseconds,
+ * relative to the first beat (which is always 0).
+ * Gaps represent silences; close values = fast notes.
+ */
+const PATTERNS = [
+  // Round 1 — very easy (3 beats)
+  [0, 500, 1000],
+  // Round 2 — easy (3 beats, syncopated)
+  [0, 300, 900],
+  // Round 3 — medium (4 beats)
+  [0, 400, 800, 1200],
+  // Round 4 — medium (4 beats, uneven)
+  [0, 250, 750, 1000],
+  // Round 5 — harder (5 beats)
+  [0, 200, 400, 800, 1200],
+  // Round 6 — harder (5 beats, tricky)
+  [0, 300, 450, 900, 1100],
+  // Round 7 — hard (6 beats)
+  [0, 150, 450, 600, 900, 1200],
+  // Round 8 — hard (6 beats, complex)
+  [0, 200, 350, 700, 850, 1150],
+  // Round 9 — very hard (7 beats)
+  [0, 150, 300, 500, 700, 900, 1150],
+  // Round 10 — expert (8 beats)
+  [0, 100, 250, 400, 600, 750, 950, 1150],
+];
+
+/** Get pattern for a given round (1-indexed). Cycles if > patterns available. */
+function getPattern(round) {
+  const idx = Math.min(round - 1, PATTERNS.length - 1);
+  return PATTERNS[idx];
+}
+
+// ── GAME STATE ────────────────────────────────────────────────
+const TOTAL_ROUNDS = 6;
+
+const state = {
+  playerName:    'Player',
+  mode:          'practice',   // 'practice' | 'competition'
+  round:         1,
+  totalScore:    0,
+  phase:         'idle',       // 'idle' | 'countdown' | 'demo' | 'input' | 'result'
+  targetPattern: [],           // ms timestamps (relative)
+  playerTaps:    [],           // ms timestamps (relative, set during input)
+  inputStart:    null,         // Date.now() when input phase begins
+  lastKeyTime:   0,            // For key-repeat prevention
+  keyDown:       false,        // Track keydown state
+  practiceRetry: false,
+};
+
+// ── SCREEN MANAGEMENT ─────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'screen-leaderboard') renderLeaderboard();
+}
+
+// ── NAME / MODE ───────────────────────────────────────────────
+function focusStart() {
+  const n = document.getElementById('player-name').value.trim();
+  if (n) state.playerName = n;
+}
+
+function selectMode(mode) {
+  state.mode = mode;
+  document.getElementById('mode-practice').classList.toggle('selected', mode === 'practice');
+  document.getElementById('mode-competition').classList.toggle('selected', mode === 'competition');
+  playClickSound();
+}
+
+// ── GAME FLOW ─────────────────────────────────────────────────
+
+/** Kick off a new game from the start screen. */
+function startGame() {
+  // grab name if set
+  const n = document.getElementById('player-name').value.trim();
+  if (n) state.playerName = n;
+
+  getAudioCtx(); // unlock audio context via user gesture
+
+  state.round      = 1;
+  state.totalScore = 0;
+  state.practiceRetry = false;
+
+  document.getElementById('hud-mode-label').textContent =
+    state.mode === 'practice' ? '🎓 Practice' : '🏆 Competition';
+
+  startRound();
+}
+
+/** Begin a single round: countdown → demo → input. */
+function startRound() {
+  state.phase = 'countdown';
+  state.targetPattern = getPattern(state.round);
+  state.playerTaps = [];
+
+  updateHUD();
+  showScreen('screen-countdown');
+  runCountdown(3, () => {
+    showScreen('screen-game');
+    setMessage('👂 Listen carefully…', 'msg-listen');
+    clearViz();
+    drawTargetViz(state.targetPattern);
+    disableSpacebar();
+    playDemoPattern(state.targetPattern, () => {
+      setMessage('🥁 Your turn! Copy the rhythm!', 'msg-go');
+      enableSpacebar();
+      beginInputPhase();
+    });
+  });
+}
+
+/** Display countdown from n→"GO!" */
+function runCountdown(n, cb) {
+  const el = document.getElementById('countdown-display');
+  const colors = ['var(--accent1)', 'var(--accent2)', 'var(--accent3)', 'var(--accent4)'];
+
+  function tick(val) {
+    if (val === 0) {
+      el.textContent = 'GO!';
+      el.style.color = 'var(--accent3)';
+      playBeep(880, 0.2, 'sine', 0.4);
+      setTimeout(cb, 600);
+      return;
+    }
+    el.textContent = val;
+    el.style.color = colors[val % colors.length];
+    el.style.animation = 'none';
+    void el.offsetWidth; // reflow to restart animation
+    el.style.animation = 'countPulse .8s ease';
+    playBeep(440 + val * 60, 0.12, 'sine', 0.3);
+    setTimeout(() => tick(val - 1), 900);
+  }
+  tick(n);
+}
+
+/**
+ * Schedule and play all beats of the target pattern using Web Audio API.
+ * @param {number[]} pattern  - Array of timestamps in ms (relative)
+ * @param {Function} onDone   - Called after last beat + small buffer
+ */
+function playDemoPattern(pattern, onDone) {
+  const ctx = getAudioCtx();
+  const startT = ctx.currentTime + 0.3; // small lead-in
+  const cursor = document.getElementById('viz-cursor');
+
+  pattern.forEach((ms, i) => {
+    const t = startT + ms / 1000;
+    playDemoBeep(t);
+
+    // Highlight viz beat at correct time
+    setTimeout(() => {
+      highlightTargetBeat(i);
+      // Move cursor
+      if (cursor && pattern.length > 1) {
+        const pct = ms / (pattern[pattern.length - 1] + 300);
+        cursor.style.left = (pct * 100) + '%';
+        cursor.style.opacity = '1';
+      }
+    }, (ms + 300) + 50); // +300 = lead-in converted to ms
+  });
+
+  const totalMs = (pattern[pattern.length - 1] + 300) * 1 + 800;
+  setTimeout(() => {
+    if (cursor) cursor.style.opacity = '0';
+    onDone();
+  }, totalMs + 300);
+}
+
+/** Start recording player taps. Auto-closes after silence window. */
+function beginInputPhase() {
+  state.phase = 'input';
+  state.playerTaps = [];
+  state.inputStart = null;
+
+  // Auto-finish after: last expected beat + generous buffer
+  const lastBeat = state.targetPattern[state.targetPattern.length - 1];
+  const autoTimeout = lastBeat + 2000; // 2 s of silence after expected end
+
+  state._inputTimer = setTimeout(() => {
+    if (state.phase === 'input') finishInput();
+  }, autoTimeout + 200);
+}
+
+/** Handle a player tap (spacebar or button press). */
+function handleTap() {
+  if (state.phase !== 'input') return;
+
+  // Debounce key-repeat (50 ms minimum gap)
+  const now = Date.now();
+  if (now - state.lastKeyTime < 50) return;
+  state.lastKeyTime = now;
+
+  // First tap sets the reference time
+  if (state.inputStart === null) state.inputStart = now;
+
+  const relTime = now - state.inputStart;
+  state.playerTaps.push(relTime);
+
+  playPlayerBeep();
+  flashSpacebar();
+  drawPlayerBeat(relTime, state.targetPattern);
+
+  // Reset auto-finish timer on each tap
+  clearTimeout(state._inputTimer);
+  const lastBeat = state.targetPattern[state.targetPattern.length - 1];
+  state._inputTimer = setTimeout(() => {
+    if (state.phase === 'input') finishInput();
+  }, 1500);
+}
+
+/** Finalise input, score the round, show result. */
+function finishInput() {
+  if (state.phase !== 'input') return;
+  state.phase = 'result';
+  clearTimeout(state._inputTimer);
+  disableSpacebar();
+  setMessage('Calculating…', '');
+
+  const result = scoreRound(state.targetPattern, state.playerTaps);
+  state.totalScore += result.total;
+
+  setTimeout(() => showRoundResult(result), 600);
+}
+
+// ── SCORING ───────────────────────────────────────────────────
+/**
+ * Score the player's performance for one round.
+ * Returns { total, countScore, timingScore, rhythmScore, feedback }
+ */
+function scoreRound(target, player) {
+  const maxScore = 100;
+
+  // 1. Count score (33 pts max): how close is beat count?
+  const targetN = target.length;
+  const playerN = player.length;
+  const countDiff = Math.abs(targetN - playerN);
+  const countScore = Math.max(0, Math.round(33 * (1 - countDiff / Math.max(targetN, 1))));
+
+  // 2. If player tapped nothing, score is 0
+  if (playerN === 0) {
+    return { total: 0, countScore: 0, timingScore: 0, rhythmScore: 0,
+             feedback: "You didn't tap anything! Try again.", grade: 'F' };
+  }
+
+  // 3. Normalize intervals relative to first tap
+  const targetIntervals = getIntervals(target);
+  const playerIntervals = getIntervals(player);
+
+  // 4. Rhythm score (34 pts max): compare interval patterns using normalized DTW-like approach
+  const rhythmScore = calcRhythmScore(targetIntervals, playerIntervals, 34);
+
+  // 5. Timing score (33 pts max): average absolute error per interval
+  const timingScore = calcTimingScore(targetIntervals, playerIntervals, 33);
+
+  const total = Math.min(100, countScore + rhythmScore + timingScore);
+
+  let feedback, grade;
+  if (total >= 90)      { feedback = '🌟 Perfect! Incredible timing!';   grade = 'S'; }
+  else if (total >= 75) { feedback = '🎵 Excellent! Very close!';         grade = 'A'; }
+  else if (total >= 55) { feedback = '👍 Good effort! Keep practising!'; grade = 'B'; }
+  else if (total >= 35) { feedback = '😅 Getting there! Try again!';     grade = 'C'; }
+  else                  { feedback = '💪 Keep going — you can do it!';    grade = 'D'; }
+
+  return { total, countScore, timingScore, rhythmScore, feedback, grade };
+}
+
+/** Convert timestamps to inter-beat intervals. */
+function getIntervals(timestamps) {
+  if (timestamps.length < 2) return [];
+  return timestamps.slice(1).map((t, i) => t - timestamps[i]);
+}
+
+/**
+ * Compare two interval arrays; returns 0–maxPts.
+ * Uses greedy matching: align shorter sequence to longer.
+ */
+function calcRhythmScore(targetIntvls, playerIntvls, maxPts) {
+  if (!targetIntvls.length && !playerIntvls.length) return maxPts;
+  if (!targetIntvls.length || !playerIntvls.length) return 0;
+
+  const n = Math.min(targetIntvls.length, playerIntvls.length);
+  const tolerance = 400; // ms — within this = full credit, above = 0
+
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    const err = Math.abs(targetIntvls[i] - playerIntvls[i]);
+    const credit = Math.max(0, 1 - err / tolerance);
+    total += credit;
+  }
+  return Math.round(maxPts * (total / Math.max(targetIntvls.length, playerIntvls.length)));
+}
+
+/**
+ * Average timing accuracy per matched interval; returns 0–maxPts.
+ */
+function calcTimingScore(targetIntvls, playerIntvls, maxPts) {
+  if (!targetIntvls.length && !playerIntvls.length) return maxPts;
+  if (!targetIntvls.length || !playerIntvls.length) return 0;
+
+  const n = Math.min(targetIntvls.length, playerIntvls.length);
+  const tolerance = 250; // ms
+
+  let totalErr = 0;
+  for (let i = 0; i < n; i++) {
+    totalErr += Math.abs(targetIntvls[i] - playerIntvls[i]);
+  }
+  const avgErr = totalErr / n;
+  const frac = Math.max(0, 1 - avgErr / tolerance);
+  return Math.round(maxPts * frac);
+}
+
+// ── RESULT SCREEN ─────────────────────────────────────────────
+function showRoundResult(result) {
+  showScreen('screen-result');
+
+  const isLastRound = state.round >= TOTAL_ROUNDS;
+
+  // Title
+  document.getElementById('result-title').textContent =
+    isLastRound ? '🎉 Final Round!' : `Round ${state.round} Complete!`;
+
+  // Animate score ring
+  const arc = document.getElementById('score-arc');
+  const circumference = 427;
+  setTimeout(() => {
+    arc.style.strokeDashoffset = circumference * (1 - result.total / 100);
+  }, 100);
+
+  document.getElementById('result-score').textContent = result.total;
+
+  // Colour arc by grade
+  const gradeColors = { S:'var(--accent2)', A:'var(--accent3)', B:'var(--accent4)', C:'var(--accent5)', D:'var(--accent1)', F:'var(--accent1)' };
+  arc.style.stroke = gradeColors[result.grade] || 'var(--accent2)';
+
+  // Breakdown pills
+  setPill('pill-count',  'pb-count',  result.countScore  + '/33', result.countScore  >= 25);
+  setPill('pill-timing', 'pb-timing', result.timingScore + '/33', result.timingScore >= 25);
+  setPill('pill-rhythm', 'pb-rhythm', result.rhythmScore + '/34', result.rhythmScore >= 26);
+
+  document.getElementById('result-msg').textContent = result.feedback;
+
+  // Buttons
+  const btnsEl = document.getElementById('result-btns');
+  btnsEl.innerHTML = '';
+
+  if (result.total >= 60 || state.mode === 'competition') {
+    // Play success or partial jingle
+    result.total >= 75 ? playSuccessJingle() : null;
+  } else {
+    playFailSound();
+  }
+
+  if (isLastRound) {
+    btnsEl.innerHTML = `<button class="btn btn-primary" onclick="showFinalScreen()">See Final Score</button>`;
+  } else {
+    if (state.mode === 'practice' && result.total < 70) {
+      btnsEl.innerHTML += `<button class="btn btn-secondary" onclick="retryRound()">🔄 Retry Round</button>`;
+    }
+    btnsEl.innerHTML += `<button class="btn btn-success" onclick="nextRound()">Next Round →</button>`;
+  }
+}
+
+function setPill(pillId, spanId, text, good) {
+  const pill = document.getElementById(pillId);
+  const span = document.getElementById(spanId);
+  span.textContent = text;
+  pill.className = 'score-pill ' + (good ? 'good' : 'bad');
+}
+
+function retryRound() {
+  state.totalScore -= (state.totalScore > 0 ? 0 : 0); // no penalty for retry in practice
+  playClickSound();
+  startRound();
+}
+
+function nextRound() {
+  state.round++;
+  playClickSound();
+  startRound();
+}
+
+function showFinalScreen() {
+  // Save to leaderboard
+  saveScore(state.playerName, state.totalScore, state.mode);
+
+  document.getElementById('final-score').textContent = state.totalScore;
+  document.getElementById('final-name-display').textContent =
+    `${state.playerName} — ${state.mode === 'competition' ? '🏆 Competition' : '🎓 Practice'} Mode`;
+
+  showScreen('screen-final');
+  playSuccessJingle();
+}
+
+// ── HUD UPDATE ────────────────────────────────────────────────
+function updateHUD() {
+  document.getElementById('hud-round').textContent = state.round + ' / ' + TOTAL_ROUNDS;
+  document.getElementById('hud-score').textContent = state.totalScore;
+}
+
+// ── MESSAGE AREA ──────────────────────────────────────────────
+function setMessage(text, cls) {
+  const el = document.getElementById('message-area');
+  el.textContent = text;
+  el.className = cls || '';
+}
+
+// ── SPACEBAR BUTTON ───────────────────────────────────────────
+function enableSpacebar() {
+  const btn = document.getElementById('spacebar-btn');
+  btn.classList.remove('disabled');
+}
+function disableSpacebar() {
+  const btn = document.getElementById('spacebar-btn');
+  btn.classList.add('disabled');
+}
+function flashSpacebar() {
+  const btn = document.getElementById('spacebar-btn');
+  btn.classList.add('pressed');
+  setTimeout(() => btn.classList.remove('pressed'), 120);
+}
+
+// ── VISUALIZER ────────────────────────────────────────────────
+const VIZ_PADDING = 8;    // px from edge
+const VIZ_WINDOW  = 1600; // ms to display
+
+function clearViz() {
+  const targetTrack = document.getElementById('viz-target');
+  const playerTrack = document.getElementById('viz-player');
+  // Remove beat dots (keep cursor)
+  targetTrack.querySelectorAll('.viz-beat').forEach(b => b.remove());
+  playerTrack.querySelectorAll('.viz-beat').forEach(b => b.remove());
+}
+
+function drawTargetViz(pattern) {
+  const track = document.getElementById('viz-target');
+  const totalMs = pattern[pattern.length - 1] || 1;
+  const window  = Math.max(totalMs + 300, VIZ_WINDOW);
+  const w = track.clientWidth || 600;
+
+  pattern.forEach((ms, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'viz-beat target';
+    dot.id = 'tviz-' + i;
+    const pct = VIZ_PADDING + (ms / window) * (w - VIZ_PADDING * 2);
+    dot.style.left = pct + 'px';
+    track.appendChild(dot);
+  });
+}
+
+function highlightTargetBeat(i) {
+  const dot = document.getElementById('tviz-' + i);
+  if (!dot) return;
+  dot.style.opacity = '1';
+  dot.style.transform = 'translateX(-50%) scaleY(1.4)';
+  setTimeout(() => {
+    dot.style.transform = 'translateX(-50%) scaleY(1)';
+    dot.style.opacity = '.7';
+  }, 150);
+}
+
+function drawPlayerBeat(relMs, targetPattern) {
+  const track = document.getElementById('viz-player');
+  const totalMs = targetPattern[targetPattern.length - 1] || 1;
+  const window  = Math.max(totalMs + 300, VIZ_WINDOW);
+  const w = track.clientWidth || 600;
+
+  const dot = document.createElement('div');
+  dot.className = 'viz-beat player';
+  const pct = VIZ_PADDING + (relMs / window) * (w - VIZ_PADDING * 2);
+  dot.style.left = pct + 'px';
+  track.appendChild(dot);
+}
+
+// ── KEYBOARD HANDLER ──────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (e.repeat) return; // ignore key-hold repeats
+    handleTap();
+  }
+});
+
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Space') state.keyDown = false;
+});
+
+// ── LEADERBOARD ───────────────────────────────────────────────
+const LB_KEY = 'beatback_leaderboard_v1';
+
+function loadLeaderboard() {
+  try {
+    return JSON.parse(localStorage.getItem(LB_KEY)) || [];
+  } catch { return []; }
+}
+
+function saveScore(name, score, mode) {
+  const lb = loadLeaderboard();
+  lb.push({ name: name || 'Anonymous', score, mode, date: new Date().toLocaleDateString() });
+  lb.sort((a, b) => b.score - a.score);
+  lb.splice(10); // keep top 10
+  localStorage.setItem(LB_KEY, JSON.stringify(lb));
+}
+
+function renderLeaderboard() {
+  const lb  = loadLeaderboard();
+  const list = document.getElementById('leaderboard-list');
+  const empty = document.getElementById('lb-empty');
+
+  // Clear old entries
+  list.querySelectorAll('li:not(#lb-empty)').forEach(li => li.remove());
+
+  if (!lb.length) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const rankClasses = ['gold', 'silver', 'bronze'];
+  const rankEmoji   = ['🥇','🥈','🥉'];
+
+  lb.forEach((entry, i) => {
+    const li = document.createElement('li');
+    if (entry.name === state.playerName && entry.score === state.totalScore) {
+      li.classList.add('highlight');
+    }
+    const rankCls = rankClasses[i] || '';
+    li.innerHTML = `
+      <span class="lb-rank ${rankCls}">${rankEmoji[i] || (i + 1)}</span>
+      <span class="lb-name">${escHtml(entry.name)}</span>
+      <span class="lb-mode">${entry.mode === 'competition' ? '🏆' : '🎓'}</span>
+      <span class="lb-score">${entry.score}</span>
+    `;
+    list.appendChild(li);
+  });
+}
+
+function confirmResetLeaderboard() {
+  openModal(
+    'Reset Leaderboard?',
+    'All scores will be permanently deleted.',
+    () => {
+      localStorage.removeItem(LB_KEY);
+      renderLeaderboard();
+      playClickSound();
+    }
+  );
+}
+
+// ── MODAL HELPER ──────────────────────────────────────────────
+function openModal(title, body, onConfirm) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent  = body;
+  document.getElementById('modal-confirm').onclick = () => {
+    onConfirm();
+    closeModal();
+  };
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ── UTILITY ───────────────────────────────────────────────────
+function escHtml(str) {
+  return str.replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])
+  );
+}
+
+// ── TOUCH SUPPORT (prevent double-fire on mobile) ─────────────
+document.getElementById('spacebar-btn').addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  handleTap();
+}, { passive: false });
+
+// ── FULLSCREEN ON DOUBLE-TAP TITLE ────────────────────────────
+document.querySelector('.game-title').addEventListener('dblclick', () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.();
+  } else {
+    document.exitFullscreen?.();
+  }
+});
+
+// ── INIT ──────────────────────────────────────────────────────
+// Make sure leaderboard screen updates when navigated to via JS
+// (already handled in renderLeaderboard call inside showScreen)
+showScreen('screen-start');
+</script>
+</body>
+</html>
